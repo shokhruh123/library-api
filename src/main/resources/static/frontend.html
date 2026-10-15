@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Справочник книг</title>
+    <style>
+        :root {
+            --bg: #f5f6fa;
+            --card: #ffffff;
+            --text: #1f2430;
+            --muted: #6b7280;
+            --accent: #4f46e5;
+            --danger: #dc2626;
+            --ok: #16a34a;
+            --border: #e5e7eb;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) {
+                --bg: #0f1117;
+                --card: #181b24;
+                --text: #e8eaf0;
+                --muted: #9aa3b2;
+                --accent: #818cf8;
+                --danger: #f87171;
+                --ok: #4ade80;
+                --border: #2a2f3c;
+            }
+        }
+        :root[data-theme="dark"] {
+            --bg: #0f1117;
+            --card: #181b24;
+            --text: #e8eaf0;
+            --muted: #9aa3b2;
+            --accent: #818cf8;
+            --danger: #f87171;
+            --ok: #4ade80;
+            --border: #2a2f3c;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        }
+        .container { max-width: 980px; margin: 0 auto; padding: 16px; }
+        h1 { font-size: 1.6rem; margin: 16px 0; }
+        h2 { font-size: 1.1rem; margin: 0 0 12px; }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+        }
+        label {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+        input {
+            padding: 9px 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--text);
+            font: inherit;
+        }
+        button {
+            padding: 9px 14px;
+            border: 0;
+            border-radius: 8px;
+            background: var(--accent);
+            color: #fff;
+            font: inherit;
+            cursor: pointer;
+        }
+        button.secondary {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+        button.danger { background: var(--danger); }
+        .buttons { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+        .msg { margin-top: 12px; font-size: 0.92rem; min-height: 1.2em; }
+        .msg.error { color: var(--danger); }
+        .msg.ok { color: var(--ok); }
+        .toolbar { margin-bottom: 12px; }
+        .toolbar input { width: 100%; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td {
+            text-align: left;
+            padding: 10px 8px;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.95rem;
+            vertical-align: top;
+        }
+        th { color: var(--muted); font-weight: 500; }
+        .row-actions { white-space: nowrap; }
+        .row-actions button { padding: 6px 10px; margin-right: 6px; }
+        .hidden { display: none; }
+        @media (max-width: 640px) {
+            thead { display: none; }
+            table, tbody, tr, td { display: block; width: 100%; }
+            tr {
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                padding: 8px;
+                margin-bottom: 10px;
+            }
+            td { border: 0; padding: 4px 0; }
+            td::before {
+                content: attr(data-label) ": ";
+                color: var(--muted);
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Справочник книг</h1>
+
+    <div class="card">
+        <h2 id="formTitle">Новая книга</h2>
+        <form id="bookForm">
+            <div class="form-grid">
+                <label>Название *
+                    <input id="title" required maxlength="255">
+                </label>
+                <label>Автор *
+                    <input id="author" required maxlength="255">
+                </label>
+                <label>Год
+                    <input id="year" type="number" min="1400" max="2100">
+                </label>
+                <label>ISBN
+                    <input id="isbn" maxlength="20" placeholder="978-5-17-000001-1">
+                </label>
+                <label>Издательство
+                    <input id="publisher" maxlength="255">
+                </label>
+                <label>Жанр
+                    <input id="genre" maxlength="255">
+                </label>
+            </div>
+            <div class="buttons">
+                <button type="submit" id="saveBtn">Добавить</button>
+                <button type="button" class="secondary hidden" id="cancelBtn">Отмена</button>
+            </div>
+        </form>
+        <div id="msg" class="msg"></div>
+    </div>
+
+    <div class="card">
+        <div class="toolbar">
+            <input id="search" type="search" placeholder="Поиск по названию или автору">
+        </div>
+        <table>
+            <thead>
+            <tr>
+                <th>Название</th>
+                <th>Автор</th>
+                <th>Год</th>
+                <th>ISBN</th>
+                <th>Издательство</th>
+                <th>Жанр</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const API = '/books';
+    let allBooks = [];
+    let editingId = null;
+
+    const $ = id => document.getElementById(id);
+
+    function esc(value) {
+        return String(value ?? '').replace(/[&<>"']/g, c => (
+            {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]
+        ));
+    }
+
+    function showMsg(text, ok) {
+        const m = $('msg');
+        m.textContent = text;
+        m.className = 'msg ' + (ok ? 'ok' : 'error');
+    }
+
+    async function api(method, url, body) {
+        const options = {method, headers: {}};
+        if (body !== undefined) {
+            options.headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(body);
+        }
+        let response;
+        try {
+            response = await fetch(url, options);
+        } catch {
+            throw new Error('Сервер недоступен');
+        }
+        if (response.status === 204) return null;
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+            throw new Error((data && data.message) || `Ошибка ${response.status}`);
+        }
+        return data;
+    }
+
+    function renderList() {
+        const q = $('search').value.trim().toLowerCase();
+        const books = allBooks.filter(b =>
+            !q || [b.title, b.author].some(v => (v || '').toLowerCase().includes(q))
+        );
+        $('rows').innerHTML = books.length
+            ? books.map(b => `
+                <tr>
+                    <td data-label="Название">${esc(b.title)}</td>
+                    <td data-label="Автор">${esc(b.author)}</td>
+                    <td data-label="Год">${esc(b.year)}</td>
+                    <td data-label="ISBN">${esc(b.isbn)}</td>
+                    <td data-label="Издательство">${esc(b.publisher)}</td>
+                    <td data-label="Жанр">${esc(b.genre)}</td>
+                    <td class="row-actions">
+                        <button class="secondary" data-edit="${b.id}">Изменить</button>
+                        <button class="danger" data-delete="${b.id}">Удалить</button>
+                    </td>
+                </tr>`).join('')
+            : '<tr><td colspan="7">Книг не найдено</td></tr>';
+    }
+
+    async function loadBooks() {
+        try {
+            allBooks = await api('GET', API);
+            renderList();
+        } catch (err) {
+            showMsg(err.message, false);
+        }
+    }
+
+    function readForm() {
+        const value = id => $(id).value.trim();
+        const year = value('year');
+        return {
+            title: value('title'),
+            author: value('author'),
+            year: year ? Number(year) : null,
+            isbn: value('isbn') || null,
+            publisher: value('publisher') || null,
+            genre: value('genre') || null
+        };
+    }
+
+    function resetForm() {
+        $('bookForm').reset();
+        editingId = null;
+        $('formTitle').textContent = 'Новая книга';
+        $('saveBtn').textContent = 'Добавить';
+        $('cancelBtn').classList.add('hidden');
+    }
+
+    function startEdit(id) {
+        const book = allBooks.find(b => b.id === id);
+        if (!book) return;
+        editingId = id;
+        $('title').value = book.title ?? '';
+        $('author').value = book.author ?? '';
+        $('year').value = book.year ?? '';
+        $('isbn').value = book.isbn ?? '';
+        $('publisher').value = book.publisher ?? '';
+        $('genre').value = book.genre ?? '';
+        $('formTitle').textContent = 'Редактирование книги';
+        $('saveBtn').textContent = 'Сохранить';
+        $('cancelBtn').classList.remove('hidden');
+        window.scrollTo({top: 0, behavior: 'smooth'});
+    }
+
+    $('bookForm').addEventListener('submit', async e => {
+        e.preventDefault();
+        const body = readForm();
+        try {
+            if (editingId) {
+                await api('PUT', `${API}/${editingId}`, body);
+                showMsg('Книга обновлена', true);
+            } else {
+                await api('POST', API, body);
+                showMsg('Книга добавлена', true);
+            }
+            resetForm();
+            await loadBooks();
+        } catch (err) {
+            showMsg(err.message, false);
+        }
+    });
+
+    $('cancelBtn').addEventListener('click', () => {
+        resetForm();
+        showMsg('', true);
+    });
+
+    $('rows').addEventListener('click', async e => {
+        const editId = e.target.dataset.edit;
+        const deleteId = e.target.dataset.delete;
+        if (editId) {
+            startEdit(Number(editId));
+        } else if (deleteId) {
+            if (!confirm('Удалить книгу?')) return;
+            try {
+                await api('DELETE', `${API}/${deleteId}`);
+                showMsg('Книга удалена', true);
+                await loadBooks();
+            } catch (err) {
+                showMsg(err.message, false);
+            }
+        }
+    });
+
+    $('search').addEventListener('input', renderList);
+
+    loadBooks();
+</script>
+</body>
+</html>
